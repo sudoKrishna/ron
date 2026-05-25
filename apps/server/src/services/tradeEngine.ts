@@ -79,6 +79,49 @@ export class TradeEngin {
         }
         return trades;
     }
+    public processOrder(order : Order) : Trade[] {
+        if(order.type === "LIMIT" && order.price === undefined) {
+            throw new Error("limit orders must have a price");
+        }
+
+        if(order.type === "MARKET") {
+            return order.side === "BUY"
+            ? this.matchMarketBuy(order)
+            : this.matchMarketSell(order);
+        }
+        return order.side === "BUY"
+        ? this.matchBuy(order)
+        : this.matchSell(order);
+    }
+
+    private mathcBuy(order : Order) : Trade[] {
+        const trades : Trade[] =[];
+        while (
+            order.qty > 0 && this.orderBook.asks.length > 0 
+            && order.price! >= this.orderBook.asks[0]!.price!
+        ) {
+            const bestAsk = this.orderBook.asks[0]!;
+            const tradedQty = Math.min(order.qty, bestAsk.qty);
+            const tradePrice = bestAsk.price!;
+            trades.push({
+                buyOrderId : order.id,
+                sellOrderId : bestAsk.id,
+                buyerUserId : order.userId,
+                sellerUserId : bestAsk.userId,
+                price : tradePrice,
+                qty : tradedQty,
+            });
+            order.qty -= tradedQty;
+            bestAsk.qty -= tradedQty;
+            if(bestAsk.qty === 0) {
+                this.orderBook.asks.shift();
+            }
+        }
+        if(order.qty > 0) {
+            this.insertBid(order);
+        }
+        return trades;
+    }
     
 
 }
