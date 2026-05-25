@@ -94,7 +94,7 @@ export class TradeEngin {
         : this.matchSell(order);
     }
 
-    private mathcBuy(order : Order) : Trade[] {
+    private matchBuy(order : Order) : Trade[] {
         const trades : Trade[] =[];
         while (
             order.qty > 0 && this.orderBook.asks.length > 0 
@@ -122,6 +122,36 @@ export class TradeEngin {
         }
         return trades;
     }
+    private matchSell(order: Order) : Trade[] {
+        const trades : Trade[] = [];
+        while (
+            order.qty > 0 &&
+            this.orderBook.bids.length > 0 &&
+            order.price! <= this.orderBook.bids[0]!.price!
+        ) {
+            const bestBids = this.orderBook.bids[0]!;
+            const tradedQty = Math.min(order.qty, bestBids.qty);
+            const tradePrice = bestBids.price!;
+
+            trades.push({
+                buyOrderId : bestBids.id,
+                sellOrderId : order.id,
+                buyerUserId : bestBids.userId,
+                sellerUserId : order.userId,
+                price : bestBids.price!,
+                qty : tradedQty,
+            });
+            order.qty -= tradedQty;
+            bestBids.qty -= tradedQty;
+            if(bestBids.qty === 0) {
+                this.orderBook.bids.shift();
+            }
+        }
+        if(order.qty > 0) {
+            this.insertAsk(order);
+        }
+        return trades;
+    }
 
     public cancelOrder(orderId : string): boolean {
         const bidIndex = this.orderBook.bids.findIndex(
@@ -140,6 +170,30 @@ export class TradeEngin {
         }
         return false;
     }
+     private insertBid(order: Order) {
+        this.orderBook.bids.push(order);
+        this.orderBook.bids.sort((a , b) => {
+            if(b.price ! !== a.price) {
+                return b.price! - a.price!;
+            }
+            return a.createdAt - b.createdAt;
+        });
+     }
 
+     private insertAsk(order : Order) {
+        this.orderBook.asks.push(order);
+        this.orderBook.asks.sort((a, b) => {
+            if(a.price! !== b.price!) {
+                return a.price! - b.price!;
+            } 
+            return a.createdAt - b.createdAt;
+        });
+     }
+
+     public printBook() {
+        console.log("BIDS:" , this.orderBook.bids);
+        console.log("ASKS:", this.orderBook.asks);
+     }
+     
 
 }
