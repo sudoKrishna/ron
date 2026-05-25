@@ -11,3 +11,33 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+enum PositionType {
+  LONG
+  SHORT
+}
+enum Side {
+  BUY
+  SELL
+}
+enum OrderType {
+  LIMIT
+  MARKET
+}
+enum OrderStatus {
+ OPEN
+ PARTIALLY_FILLED
+ FILLED
+ CANCELLED
+ REJECTED
+}
+enum PositionStatus {
+OPEN
+CLOSED
+}
+
+model User {
+  userId Int @id @default(autoincrement())
+  username String
+  password String
+  createdAt DateTime @default(now())
+}
