@@ -39,5 +39,15 @@ model User {
   userId Int @id @default(autoincrement())
   username String
   password String
+  collateral Collateral?
   createdAt DateTime @default(now())
 }
+
+model Collateral {
+  id Int @id @default(autoincrement())
+  available Float
+  locked Float
+  userId Int @unique
+  user User @relation(fields: [userId], references: [userId])
+}
+
