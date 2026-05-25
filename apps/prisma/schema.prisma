@@ -40,6 +40,7 @@ model User {
   username String
   password String
   collateral Collateral?
+  orders Order[]
   createdAt DateTime @default(now())
 }
 
@@ -50,4 +51,18 @@ model Collateral {
   userId Int @unique
   user User @relation(fields: [userId], references: [userId])
 }
-
+model Order {
+  orderId Int @id @default(autoincrement())
+  userId Int
+  user User @relation(fields: [userId], references: [userId])
+  market String
+  side  Side
+  orderType OrderType
+  qty Float
+  price Float
+  margin Float
+  leverage Float
+  status OrderStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
