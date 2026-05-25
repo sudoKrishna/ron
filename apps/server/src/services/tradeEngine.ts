@@ -58,4 +58,27 @@ export class TradeEngin {
         return trades;
     }
 
+    private matchMarketSell(order : Order) : Trade[] {
+        const trades : Trade[] = [];
+        while(order.qty > 0 && this.orderBook.bids.length > 0) {
+            const bestBids = this.orderBook.bids[0]!;
+            const tradeQty = Math.min(order.qty , bestBids.qty);
+            trades.push({
+                buyOrderId : order.id,
+                sellOrderId : bestBids.id,
+                buyerUserId : order.userId,
+                sellerUserId : bestBids.userId,
+                price : bestBids.price!,
+                qty : tradeQty,
+            });
+            order.qty -= tradeQty;
+            bestBids.qty -= tradeQty;
+            if(bestBids.qty === 0) {
+                this.orderBook.asks.shift();
+            }
+        }
+        return trades;
+    }
+    
+
 }
