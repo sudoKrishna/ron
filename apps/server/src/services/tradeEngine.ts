@@ -122,6 +122,24 @@ export class TradeEngin {
         }
         return trades;
     }
-    
+
+    public cancelOrder(orderId : string): boolean {
+        const bidIndex = this.orderBook.bids.findIndex(
+            (order) => order.id === orderId
+        );
+        if(bidIndex !== -1) {
+            this.orderBook.bids.splice(bidIndex, 1);
+            return true;
+        }
+        const askIndex = this.orderBook.asks.findIndex(
+            (order) => order.id === orderId
+        );
+        if(askIndex !== -1) {
+            this.orderBook.asks.splice(askIndex, 1);
+            return true;
+        }
+        return false;
+    }
+
 
 }
