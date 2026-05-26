@@ -48,7 +48,47 @@ const orderWorker = new Worker("orderQueue" ,  async(job) => {
                 status : "OPEN"
             },
         });
+        const trades = engine.processOrder({
+            id : saveOrder.orderId.toString(),
+            userId,
+            market : order.market,
+            side : order.side ,
+          qty : order.qty,
+          price : order.price ,
+          type : order.orderType,
+          createdAt : Date.now(),
+        });
 
-        
-    })
+        for(const trade of trades) {
+            await positionService.applyFill (
+                trade.buyerUserId,
+                order.market,
+                "BUY",
+                trade.price,
+                trade.qty
+            );
+
+            await positionService.applyFill(
+                trade.sellerUserId,
+                order.market,
+                "SELL",
+                trade.price,
+                trade.qty
+            )
+        }
+
+    });
+    return true;
+}, {
+    connection : redisConnection,
+    concurrency : 40,
+}
+);
+
+orderWorker.on("completed" , (job) => {
+    console.log(`job ${job.id} completed`);
+})
+
+orderWorker.on("failed", (job, err) => {
+    console.error(`job ${job?.id} failed`, err)
 })
