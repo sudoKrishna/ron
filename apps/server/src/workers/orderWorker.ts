@@ -34,5 +34,21 @@ const orderWorker = new Worker("orderQueue" ,  async(job) => {
                 locked : collateral.locked + order.margin,
             },
         });
+
+        const saveOrder = await tx.order.create({
+            data : {
+                userId ,
+                market : order.market,
+                side : order.side,
+                orderType : order.orderType,
+                qty : order.qty,
+                price : order.price,
+                margin : order.margin,
+                leverage : order.leverage,
+                status : "OPEN"
+            },
+        });
+
+        
     })
 })
