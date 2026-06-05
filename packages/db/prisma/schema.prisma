@@ -1,0 +1,346 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MarketStatus {
+ACTIVE 
+PAUSED
+DELISTED
+}
+
+enum OrderSide {
+  BUY 
+  SELL
+}
+enum OrderType {
+LIMIT 
+MARKET
+}
+
+enum TimeInForce {
+  GTC
+  IOC 
+  FOK 
+  POST_ONLY
+}
+
+enum OrderStatus {
+  NEW 
+  PARTIALLY_FILLED
+  FILLED 
+  CANCELLED
+  REJECTED
+  EXPIRED
+}
+
+enum MarginMode {
+  CROSS
+  ISOLATED
+}
+
+enum AccountType {
+  WALLET
+  MARGIN 
+  FEE 
+  INSURANCE
+}
+
+enum LedgerRef {
+  DEPOSIT 
+  WITHDRAWAL
+  TRADE
+  FEE 
+  FUNDING
+  REALIZED_PNL
+  LIQUIDATION
+  INSURANCE
+  TRANSFER
+}
+
+enum TransferStatus {
+  PENDING 
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  balances    Balance[]
+  orders      Order[]
+  positions   Position[]
+  ledger      LedgerEntry[]
+  deposits    Deposit[]
+  withdrawals Withdrawal[]
+}
+
+
+model Asset {
+  id String @id @default(cuid())
+  symbol String @unique
+  decimals Int 
+  createdAt DateTime @default(now())
+   balances     Balance[]
+  ledger       LedgerEntry[]
+  marketsQuote Market[]      @relation("QuoteAsset")
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
+}
+
+model Market {
+  id String @id @default(cuid())
+  symbol String @unique
+  status MarketStatus @default(ACTIVE)
+
+  quoteAssetId String
+  quoteAsset Asset @relation("QuoteAsset" , fields: [quoteAssetId] , references: [id])
+
+  tickSize Decimal @db.Decimal(38, 18)
+   stepSize Decimal @db.Decimal(38, 18) 
+  minQty   Decimal @db.Decimal(38, 18)
+  maxQty   Decimal @db.Decimal(38, 18)
+
+   maxLeverage           Int
+  initialMarginRate     Decimal @db.Decimal(10, 8) 
+  maintenanceMarginRate Decimal @db.Decimal(10, 8) 
+  makerFeeRate          Decimal @db.Decimal(10, 8)
+  takerFeeRate          Decimal @db.Decimal(10, 8)
+  liquidationFeeRate    Decimal @db.Decimal(10, 8)
+
+  fundingIntervalSec Int
+  maxFundingRate     Decimal @db.Decimal(10, 8) 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders       Order[]
+  trades       Trade[]
+  positions    Position[]
+  funding      FundingPayment[]
+  fundingRates FundingRateHistory[]
+  liquidations Liquidation[]
+}
+
+model Transaction {
+  id        String        @id @default(cuid())
+  type      LedgerRef
+  createdAt DateTime      @default(now())
+  entries   LedgerEntry[]
+}
+
+model LedgerEntry {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  assetId       String
+  asset         Asset       @relation(fields: [assetId], references: [id])
+  accountType   AccountType @default(WALLET)
+  amount        Decimal     @db.Decimal(38, 18) 
+  refType       LedgerRef
+  refId         String?
+  sequence      BigInt?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId, assetId])
+  @@index([refType, refId])
+}
+
+model Balance {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  available Decimal  @default(0) @db.Decimal(38, 18)
+  locked    Decimal  @default(0) @db.Decimal(38, 18) 
+  version   Int      @default(0)                    
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, assetId])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  clientOrderId String
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  marketId      String
+  market        Market      @relation(fields: [marketId], references: [id])
+
+  side         OrderSide
+  type         OrderType
+  timeInForce  TimeInForce @default(GTC)
+  price        Decimal?    @db.Decimal(38, 18) 
+  qty          Decimal     @db.Decimal(38, 18)
+  filledQty    Decimal     @default(0) @db.Decimal(38, 18)
+  avgFillPrice Decimal?    @db.Decimal(38, 18)
+
+  reduceOnly   Boolean     @default(false)
+  postOnly     Boolean     @default(false)
+  status       OrderStatus @default(NEW)
+  rejectReason String?
+  sequence     BigInt? 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  makerTrades Trade[] @relation("MakerOrder")
+  takerTrades Trade[] @relation("TakerOrder")
+
+  @@unique([userId, clientOrderId]) 
+  @@index([marketId, status])
+}
+
+
+model Trade {
+  id           String   @id @default(cuid())
+  marketId     String
+  market       Market   @relation(fields: [marketId], references: [id])
+  makerOrderId String
+  makerOrder   Order    @relation("MakerOrder", fields: [makerOrderId], references: [id])
+  takerOrderId String
+  takerOrder   Order    @relation("TakerOrder", fields: [takerOrderId], references: [id])
+  makerUserId  String
+  takerUserId  String
+  price        Decimal  @db.Decimal(38, 18)
+  qty          Decimal  @db.Decimal(38, 18)
+  makerFee     Decimal  @db.Decimal(38, 18)
+  takerFee     Decimal  @db.Decimal(38, 18)
+  sequence     BigInt   @unique
+  createdAt    DateTime @default(now())
+
+  @@index([marketId, createdAt])
+}
+
+model Position {
+  id               String     @id @default(cuid())
+  userId           String
+  user             User       @relation(fields: [userId], references: [id])
+  marketId         String
+  market           Market     @relation(fields: [marketId], references: [id])
+
+  size             Decimal    @db.Decimal(38, 18) 
+  entryPrice       Decimal    @default(0) @db.Decimal(38, 18)
+  realizedPnl      Decimal    @default(0) @db.Decimal(38, 18)
+  margin           Decimal    @default(0) @db.Decimal(38, 18) 
+  marginMode       MarginMode @default(CROSS)
+  liquidationPrice Decimal?   @db.Decimal(38, 18)
+  lastFundingSeq   BigInt? 
+  version          Int        @default(0)
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([userId, marketId])
+  @@index([marketId])
+}
+
+model FundingRateHistory {
+  id          String   @id @default(cuid())
+  marketId    String
+  market      Market   @relation(fields: [marketId], references: [id])
+  rate        Decimal  @db.Decimal(10, 8)
+  indexPrice  Decimal  @db.Decimal(38, 18)
+  markPrice   Decimal  @db.Decimal(38, 18)
+  fundingTime DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([marketId, fundingTime])
+}
+
+model FundingPayment {
+  id           String   @id @default(cuid())
+  marketId     String
+  market       Market   @relation(fields: [marketId], references: [id])
+  userId       String
+  rate         Decimal  @db.Decimal(10, 8)
+  positionSize Decimal  @db.Decimal(38, 18)
+  markPrice    Decimal  @db.Decimal(38, 18)
+  payment      Decimal  @db.Decimal(38, 18) 
+  fundingTime  DateTime
+  sequence     BigInt
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, marketId, fundingTime])
+  @@index([marketId, fundingTime])
+}
+
+model Liquidation {
+  id              String   @id @default(cuid())
+  userId          String
+  marketId        String
+  market          Market   @relation(fields: [marketId], references: [id])
+  size            Decimal  @db.Decimal(38, 18)
+  markPrice       Decimal  @db.Decimal(38, 18)
+  bankruptcyPrice Decimal  @db.Decimal(38, 18)
+  liquidationFee  Decimal  @db.Decimal(38, 18)
+  insuranceDelta  Decimal  @default(0) @db.Decimal(38, 18)
+  isAdl           Boolean  @default(false)
+  sequence        BigInt   @unique
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([marketId, createdAt])
+}
+
+model InsuranceFund {
+  id        String   @id @default(cuid())
+  assetId   String   @unique
+  balance   Decimal  @default(0) @db.Decimal(38, 18)
+  updatedAt DateTime @updatedAt
+}
+
+
+model Deposit {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  assetId   String
+  asset     Asset          @relation(fields: [assetId], references: [id])
+  amount    Decimal        @db.Decimal(38, 18)
+  txHash    String         @unique 
+  status    TransferStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+
+model Withdrawal {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  assetId        String
+  asset          Asset          @relation(fields: [assetId], references: [id])
+  amount         Decimal        @db.Decimal(38, 18)
+  status         TransferStatus @default(PENDING)
+  idempotencyKey String         @unique
+  txHash         String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model EngineSnapshot {
+  id          String   @id @default(cuid())
+  marketScope String  
+  sequence    BigInt  
+  location    String   
+  createdAt   DateTime @default(now())
+
+  @@index([marketScope, sequence])
+}
+
